@@ -1,27 +1,101 @@
-﻿# PhoBERT-CNN Human/AI Text Classifier
+﻿# PhoBERT-CNN: Nhận diện văn bản do người viết và AI tạo ra
 
-Project hoàn chỉnh cho bài toán phân loại văn bản tiếng Việt thành `Human`/`AI` bằng kiến trúc:
+## 1. Tổng quan đề tài
 
-```text
-Dataset 200,000 -> cleaning/deduplication -> balanced subset 10,000 -> stratified split -> model comparison -> evaluation
-```
+Đây là đồ án phân loại văn bản tiếng Việt thành hai nhóm `Human` và `AI`. Mục tiêu của đề tài là đánh giá xem việc bổ sung các lớp tích chập 1D trên biểu diễn ngữ cảnh của PhoBERT có giúp nhận diện văn bản tốt hơn so với mô hình PhoBERT cơ sở hay không.
 
-## Cấu trúc
+Đề tài được triển khai theo quy trình thực nghiệm có kiểm soát:
 
 ```text
-cd1/
-├── src/phobert_cnn/
-│   ├── cli.py          # entry point và cấu hình dòng lệnh
-│   ├── data.py         # load, clean, split, tokenize
-│   ├── model.py        # PhoBERT-CNN và TinyEncoder cho smoke test
-│   ├── training.py     # train/evaluate/checkpoint
-│   └── metrics.py      # accuracy, precision, recall, F1, confusion matrix
-├── tests/test_pipeline.py
-├── requirements.txt
-└── pyproject.toml
+Dataset -> làm sạch -> cân bằng nhãn -> chia stratified 70/15/15
+		-> huấn luyện 3 mô hình trên cùng dữ liệu -> đánh giá trên test set
 ```
 
-## Cài đặt
+### Mục tiêu nghiên cứu
+
+- Xây dựng pipeline có thể tái lập cho bài toán phát hiện văn bản AI tiếng Việt.
+- So sánh công bằng PhoBERT với hai biến thể PhoBERT-CNN.
+- Đánh giá bằng Accuracy, Precision, Recall, F1-score và Loss.
+- Lưu checkpoint tốt nhất theo validation loss, chỉ sử dụng test set ở bước cuối.
+
+## 2. Các mô hình được so sánh
+
+| Mô hình | Biểu diễn đầu vào | Thành phần phân loại | Ý nghĩa trong thí nghiệm |
+| --- | --- | --- | --- |
+| **PhoBERT** | Hidden states từ `vinai/phobert-base` | Masked mean pooling + Linear | Mô hình baseline, đo năng lực của encoder ngôn ngữ |
+| **PhoBERT-CNN (2)** | Hidden states từ PhoBERT | CNN 1D kernel `(2,)` + max pooling + Linear | Bắt các mẫu cục bộ ngắn trong chuỗi biểu diễn |
+| **PhoBERT-CNN (3)** | Hidden states từ PhoBERT | CNN 1D kernel `(3,)` + max pooling + Linear | Bắt mẫu cục bộ dài hơn một bước so với CNN-2 |
+
+Trong hai biến thể CNN, đầu ra của PhoBERT được chuyển vị thành dạng `[batch, hidden_size, sequence_length]`. Sau đó, CNN, ReLU và global max pooling tạo vector đặc trưng trước khi đưa vào dropout và classification head.
+
+## 3. Dữ liệu và tiền xử lý
+
+Thí nghiệm mặc định sử dụng dataset `ICCIES-2025-DetectAI/vietnamese_news_human_ai` trên Hugging Face, split `train`.
+
+| Hạng mục | Thiết lập |
+| --- | --- |
+| Bài toán | Binary text classification |
+| Mẫu mỗi nhãn | 5.000 mẫu nhãn `0` và 5.000 mẫu nhãn `1` |
+| Tổng số mẫu | 10.000 |
+| Chia dữ liệu | Train 70%, validation 15%, test 15% |
+| Kích thước dự kiến | 7.000 / 1.500 / 1.500 |
+| Làm sạch | Loại dòng rỗng, giá trị thiếu và văn bản trùng lặp |
+| Tokenizer | PhoBERT tokenizer |
+| Độ dài tối đa | 256 tokens |
+| Random seed | 42 |
+
+Nhãn số được giữ nguyên theo dataset. Việc ánh xạ `0/1` sang `Human/AI` cần được xác nhận từ mô tả và phân bố thực tế của dataset, không được tự động đảo nhãn trong pipeline.
+
+## 4. Thiết kế thực nghiệm
+
+Ba mô hình được huấn luyện trên cùng một balanced subset, cùng cách chia stratified, tokenizer và hyperparameter. Checkpoint được chọn theo validation loss; test set không tham gia vào quá trình chọn mô hình.
+
+```mermaid
+flowchart TD
+	A[Dataset Hugging Face] --> B[Remove null, empty and duplicate texts]
+	B --> C[Balanced subset: 5,000 + 5,000]
+	C --> D[Stratified split: 70/15/15]
+	D --> E[PhoBERT tokenizer, max length 256]
+	E --> F[PhoBERT baseline]
+	E --> G[PhoBERT-CNN kernel 2]
+	E --> H[PhoBERT-CNN kernel 3]
+	F --> I[Validation loss checkpoint]
+	G --> I
+	H --> I
+	I --> J[Final evaluation on test set]
+	J --> K[comparison.csv and comparison.json]
+```
+
+### Hyperparameter chính
+
+| Hyperparameter | Giá trị mặc định |
+| --- | ---: |
+| Epochs | 3 |
+| Batch size | 8 |
+| Learning rate | `2e-5` |
+| Optimizer | AdamW |
+| Weight decay | `0.01` |
+| Dropout | `0.3` |
+| Max sequence length | 256 |
+
+## 5. Kết quả so sánh
+
+Bảng dưới đây là kết quả thực nghiệm hiện có trên test set. Các chỉ số Precision, Recall và F1 là weighted average.
+
+| Xếp hạng | Mô hình | Accuracy | Precision | Recall | F1-score |
+| :---: | --- | ---: | ---: | ---: | ---: |
+| 1 | **PhoBERT-CNN (2)** | **0.9913** | 0.99 | 0.99 | 0.99 |
+| 2 | **PhoBERT** | 0.9873 | 0.99 | 0.99 | 0.99 |
+| 3 | **PhoBERT-CNN (3)** | 0.9747 | 0.98 | 0.97 | 0.97 |
+
+### Nhận xét
+
+1. **PhoBERT-CNN (2) đạt kết quả tốt nhất** với Accuracy `0.9913`, cao hơn baseline PhoBERT khoảng `0.40` điểm phần trăm.
+2. **CNN kernel 2 phù hợp hơn kernel 3** trên thiết lập hiện tại, cho thấy các đặc trưng cục bộ ngắn có thể hữu ích hơn đối với dữ liệu này.
+3. **PhoBERT-CNN (3) giảm hiệu năng** so với hai mô hình còn lại. Nguyên nhân có thể liên quan đến kích thước receptive field, mức độ khớp dữ liệu hoặc hyperparameter chưa tối ưu cho kernel 3.
+4. Chênh lệch giữa các mô hình cần được diễn giải cùng confusion matrix và nhiều seed hơn trước khi kết luận về khả năng tổng quát hóa.
+
+## 6. Cài đặt
 
 Từ thư mục `cd1`:
 
@@ -33,27 +107,31 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Nếu dùng GPU, cài bản PyTorch tương ứng với CUDA từ trang PyTorch trước khi cài các dependency còn lại.
+Nếu sử dụng GPU, cài phiên bản PyTorch tương thích với CUDA trước khi cài các dependency còn lại.
 
-## Kiểm tra nhanh không tải PhoBERT
+## 7. Chạy dự án
 
-Nếu chạy trên Google Colab, mở file [colab_cells.txt](colab_cells.txt), copy từng cell theo thứ tự từ `CELL 1` đến `CELL 14`. File này đã cấu hình sẵn dataset cân bằng 10.000 dòng và ba mô hình so sánh.
+### Chạy giao diện Streamlit
 
-Smoke test dùng encoder nhỏ và dữ liệu giả để kiểm tra toàn bộ đường đi preprocessing -> model -> training -> metrics:
+Cài dependency và khởi động ứng dụng:
+
+```powershell
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+Ứng dụng cung cấp ô nhập văn bản, lựa chọn mô hình, đường dẫn checkpoint, xác suất dự đoán và bảng so sánh ba mô hình. Nếu chưa có checkpoint, giao diện vẫn hiển thị phần tổng quan và bảng kết quả; để dự đoán thật, chạy `--compare` trước rồi nhập đường dẫn file `.pt`.
+
+### Kiểm tra pipeline không tải PhoBERT
+
+Smoke test sử dụng `TinyEncoder` và dữ liệu giả để kiểm tra preprocessing, training và metrics:
 
 ```powershell
 python -m phobert_cnn.cli --smoke --output-dir artifacts/smoke
-```
-
-Hoặc:
-
-```powershell
 python -m pytest
 ```
 
-## Train với dataset Hugging Face
-
-Mặc định project dùng dataset `ICCIES-2025-DetectAI/vietnamese_news_human_ai`, đọc split `train`, làm sạch duplicate, lấy đúng `5,000` mẫu label `0` và `5,000` mẫu label `1`, rồi chia stratified 70/15/15. Kích thước sau chia dự kiến là `7,000` train, `1,500` validation và `1,500` test:
+### Huấn luyện một mô hình
 
 ```powershell
 python -m phobert_cnn.cli `
@@ -62,29 +140,9 @@ python -m phobert_cnn.cli `
 	--output-dir artifacts/experiment-10k
 ```
 
-Có thể thay đổi số mẫu mỗi label, nhưng mặc định là 5.000:
+Kết quả gồm `best_model.pt` và `test_metrics.json`.
 
-```powershell
-python -m phobert_cnn.cli `
-	--samples-per-label 5000 `
-	--output-dir artifacts/balanced-10k
-```
-
-Kết quả gồm `best_model.pt` và `test_metrics.json`. CLI in ra số lượng mẫu sau sampling để xác nhận `label 0 = 5000` và `label 1 = 5000`. Nhãn số chỉ được gọi là Human/AI sau khi kiểm tra mapping thực tế của dataset; project giữ nguyên giá trị label và không tự đảo nhãn.
-
-## Train với CSV/JSON cục bộ
-
-File phải có hai cột `Text` và `Label`:
-
-```powershell
-python -m phobert_cnn.cli --source data/my_dataset.csv --output-dir artifacts/local
-```
-
-Đổi tên cột bằng `--text-column` và `--label-column` nếu cần.
-
-## Ablation study
-
-Chạy toàn bộ nhóm so sánh trên cùng split, seed và hyperparameters:
+### So sánh ba mô hình
 
 ```powershell
 python -m phobert_cnn.cli `
@@ -93,51 +151,44 @@ python -m phobert_cnn.cli `
 	--output-dir artifacts/comparison-10k
 ```
 
-Project sẽ huấn luyện và đánh giá riêng:
+Lệnh trên tạo các file `comparison.csv`, `comparison.json` và checkpoint tốt nhất trong thư mục riêng của từng mô hình. Mỗi dòng trong bảng gồm `loss`, `accuracy`, `precision_weighted`, `recall_weighted` và `f1_weighted`.
 
-```mermaid
-flowchart TD
-	A[Dataset] --> B[Cleaning and deduplication]
-	B --> C[Balanced subset: 5000 label 0 + 5000 label 1]
-	C --> D[Same stratified train/validation/test split]
-	D --> N[Same tokenizer and hyperparameters]
+### Sử dụng dữ liệu cục bộ
 
-	N --> E[PhoBERT]
-	N --> F[PhoBERT + CNN kernel 2]
-	N --> G[PhoBERT + CNN kernel 3]
+CSV hoặc JSON cần có hai cột mặc định là `Text` và `Label`:
 
-	E --> J[Classification head]
-	F --> J
-	G --> J
-
-	J --> K[Test evaluation]
-	K --> L[Accuracy, Precision, Recall, F1, Loss]
-	L --> M[comparison.csv and comparison.json]
+```powershell
+python -m phobert_cnn.cli `
+	--source data/my_dataset.csv `
+	--text-column Text `
+	--label-column Label `
+	--output-dir artifacts/local
 ```
 
-| Model | CNN kernels |
-| --- | --- |
-| PhoBERT | Không dùng CNN, masked mean pooling |
-| PhoBERT-CNN (2) | `(2,)` |
-| PhoBERT-CNN (3) | `(3,)` |
-Kết quả được lưu tại `artifacts/comparison/comparison.csv` và `comparison.json`, gồm `loss`, `accuracy`, `precision_weighted`, `recall_weighted` và `f1_weighted`. Mỗi model cũng có thư mục riêng chứa checkpoint tốt nhất.
+## 8. Cấu trúc dự án
 
-### Bảng kết quả cuối cùng
+```text
+cd1/
+├── src/phobert_cnn/
+│   ├── cli.py          # entry point, tham số và thực nghiệm so sánh
+│   ├── data.py         # load, clean, cân bằng, split và tokenize dữ liệu
+│   ├── model.py        # PhoBERT, PhoBERT-CNN và TinyEncoder
+│   ├── training.py     # training loop, checkpoint và evaluation
+│   └── metrics.py      # Accuracy, Precision, Recall, F1 và confusion matrix
+├── tests/test_pipeline.py
+├── artifacts/          # checkpoint và bảng kết quả thực nghiệm
+├── requirements.txt
+└── pyproject.toml
+```
 
-Sau khi chạy đủ các thực nghiệm, có thể trình bày kết quả trong báo cáo như sau:
+## 9. Hạn chế và hướng phát triển
 
-| Model             | Accuracy | Precision | Recall | F1   |
-|-------------------|----------|-----------|--------|------|
-| PhoBERT           | 0.9873   | 0.99      | 0.99   | 0.99 |
-| PhoBERT + CNN-2   | 0.9913   | 0.99      | 0.99   | 0.99 |
-| PhoBERT + CNN-3   | 0.9747   | 0.98      | 0.97   | 0.97 |
+- Kết quả hiện tại được đo trên một dataset và một random seed; cần chạy nhiều seed để báo cáo mean ± standard deviation.
+- Nên bổ sung confusion matrix, classification report theo từng nhãn và khoảng tin cậy.
+- Có thể mở rộng ablation với nhiều kernel size, learning rate và chiến lược freeze/unfreeze PhoBERT.
+- Cần kiểm tra leakage giữa các nguồn văn bản và đánh giá thêm trên tập dữ liệu ngoài miền để đo khả năng tổng quát hóa.
 
-Các giá trị trong bảng phải được lấy từ `test` set chưa dùng trong quá trình chọn checkpoint. Nhóm `--compare` tự động chạy ba cấu hình trên cùng split, seed và hyperparameters.
+## 10. Kết luận
 
-## Ghi chú thực nghiệm
+Thực nghiệm cho thấy việc kết hợp PhoBERT với CNN kernel 2 đạt kết quả tốt nhất trong ba cấu hình được khảo sát. Pipeline đã tách riêng train, validation và test, có checkpoint theo validation loss và xuất bảng so sánh tự động, phù hợp làm nền tảng cho báo cáo đồ án cuối khóa về nhận diện văn bản AI tiếng Việt.
 
-- Seed mặc định là `42`.
-- `max_length=256`, learning rate `2e-5`, dropout `0.3`.
-- Dùng `--batch-size 4` nếu thiếu VRAM.
-- Checkpoint tốt nhất được chọn theo validation loss, không chọn theo test.
-- Test set chỉ dùng ở bước đánh giá cuối.
