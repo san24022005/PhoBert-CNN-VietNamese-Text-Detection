@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f3ec">
+    <meta name="description" content="Phân loại văn bản tiếng Việt bằng PhoBERT và các biến thể PhoBERT-CNN.">
+    <title>VietText Lab | Phát hiện văn bản AI</title>
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="/assets/script.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="VietText Lab, trang chủ">
+        <span class="brand-mark" aria-hidden="true">V</span>
+        <span class="brand-name">viettext<span>lab</span></span>
+      </a>
+      <div class="topbar-meta">
+        <span class="project-tag">ĐỒ ÁN NLP · TIẾNG VIỆT</span>
+        <span class="connection" id="connectionStatus" role="status">
+          <span class="connection-dot" aria-hidden="true"></span>
+          Đang kết nối
+        </span>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="intro" aria-labelledby="pageTitle">
+        <div class="intro-copy">
+          <p class="eyebrow"><span></span> PhoBERT / AI TEXT DETECTOR</p>
+          <h1 id="pageTitle">Ai đứng sau<br><em>những dòng chữ này?</em></h1>
+          <p class="intro-description">Phân tích văn bản tiếng Việt với PhoBERT và hai biến thể CNN. Kết quả là tín hiệu tham khảo, không phải bằng chứng tuyệt đối về tác giả.</p>
+        </div>
+        <div class="sequence-stamp" aria-label="Độ dài đầu vào tối đa 256 token">
+          <span class="stamp-label">TOKEN WINDOW</span>
+          <strong>256</strong>
+          <span class="stamp-caption">PhoBERT input length</span>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Công cụ phân tích">
+        <form class="compose-panel" id="predictForm">
+          <div class="section-heading">
+            <div>
+              <p class="section-index">01 / INPUT</p>
+              <h2>Phân tích văn bản</h2>
+            </div>
+            <button class="text-button" id="clearButton" type="button">Xóa nội dung</button>
+          </div>
+
+          <label class="field-label text-label" for="textInput">Văn bản cần kiểm tra</label>
+          <textarea id="textInput" name="text" placeholder="Dán văn bản tiếng Việt vào đây..." spellcheck="false" aria-describedby="textCount"></textarea>
+          <div class="text-meta" id="textCount" aria-live="polite">
+            <span><strong id="charCount">0</strong> ký tự</span>
+            <span><strong id="wordCount">0</strong> từ</span>
+          </div>
+
+          <div class="form-bottom">
+            <p class="input-note">Văn bản dài được tokenizer xử lý theo giới hạn đầu vào của model.</p>
+            <button class="submit-button" id="submitButton" type="submit">
+              <span id="submitLabel">Phân loại văn bản</span>
+              <span class="button-arrow" aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <p class="error-message" id="errorMessage" role="alert" hidden></p>
+        </form>
+
+      </section>
+
+      <section class="comparison-section" id="comparisonSection" aria-labelledby="comparisonHeading" aria-live="polite" hidden>
+        <div class="comparison-heading">
+          <div>
+            <p class="section-index">02 / COMPARISON</p>
+            <h2 id="comparisonHeading">Kết quả phân loại</h2>
+          </div>
+          <p class="truncation-note" id="truncationNote" hidden>Văn bản vượt giới hạn đầu vào; model sử dụng 256 token đầu theo cấu hình hiện tại.</p>
+        </div>
+        <div class="results-grid" id="resultsGrid">
+          <article class="result-card" data-model-id="phobert">
+            <div class="card-topline"><h3>PhoBERT</h3><span class="card-state">Sẵn sàng</span></div>
+            <div class="card-prediction"><span>Kết quả</span><strong data-field="prediction">Chưa có kết quả</strong></div>
+            <div class="card-metrics" data-field="metrics" hidden>
+              <div class="confidence-row"><span>Độ tin cậy</span><strong data-field="confidence">--</strong></div>
+              <div class="probability-list">
+                <div class="probability-item"><div class="probability-label"><span>AI-generated</span><span data-field="ai-value">--</span></div><div class="probability-track"><span class="probability-fill ai-fill" data-field="ai-bar"></span></div></div>
+                <div class="probability-item"><div class="probability-label"><span>Human</span><span data-field="human-value">--</span></div><div class="probability-track"><span class="probability-fill human-fill" data-field="human-bar"></span></div></div>
+              </div>
+            </div>
+            <p class="card-error" data-field="error" hidden></p>
+          </article>
+          <article class="result-card" data-model-id="phobert-cnn-2">
+            <div class="card-topline"><h3>PhoBERT + CNN-2</h3><span class="card-state">Sẵn sàng</span></div>
+            <div class="card-prediction"><span>Kết quả</span><strong data-field="prediction">Chưa có kết quả</strong></div>
+            <div class="card-metrics" data-field="metrics" hidden>
+              <div class="confidence-row"><span>Độ tin cậy</span><strong data-field="confidence">--</strong></div>
+              <div class="probability-list">
+                <div class="probability-item"><div class="probability-label"><span>AI-generated</span><span data-field="ai-value">--</span></div><div class="probability-track"><span class="probability-fill ai-fill" data-field="ai-bar"></span></div></div>
+                <div class="probability-item"><div class="probability-label"><span>Human</span><span data-field="human-value">--</span></div><div class="probability-track"><span class="probability-fill human-fill" data-field="human-bar"></span></div></div>
+              </div>
+            </div>
+            <p class="card-error" data-field="error" hidden></p>
+          </article>
+          <article class="result-card" data-model-id="phobert-cnn-3">
+            <div class="card-topline"><h3>PhoBERT + CNN-3</h3><span class="card-state">Sẵn sàng</span></div>
+            <div class="card-prediction"><span>Kết quả</span><strong data-field="prediction">Chưa có kết quả</strong></div>
+            <div class="card-metrics" data-field="metrics" hidden>
+              <div class="confidence-row"><span>Độ tin cậy</span><strong data-field="confidence">--</strong></div>
+              <div class="probability-list">
+                <div class="probability-item"><div class="probability-label"><span>AI-generated</span><span data-field="ai-value">--</span></div><div class="probability-track"><span class="probability-fill ai-fill" data-field="ai-bar"></span></div></div>
+                <div class="probability-item"><div class="probability-label"><span>Human</span><span data-field="human-value">--</span></div><div class="probability-track"><span class="probability-fill human-fill" data-field="human-bar"></span></div></div>
+              </div>
+            </div>
+            <p class="card-error" data-field="error" hidden></p>
+          </article>
+        </div>
+        <p class="comparison-caveat">Mô hình nhận diện các mẫu ngôn ngữ; hãy cân nhắc ngữ cảnh khi diễn giải.</p>
+      </section>
+      </section>
+
+      <footer class="page-footer">
+        <span>VIETTEXT LAB <i>·</i> PHOBERT CLASSIFICATION</span>
+        <span>HUMAN <i>↔</i> AI-GENERATED</span>
+      </footer>
+    </main>
+  </body>
+</html>

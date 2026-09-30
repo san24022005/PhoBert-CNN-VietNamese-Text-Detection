@@ -111,16 +111,30 @@ Nếu sử dụng GPU, cài phiên bản PyTorch tương thích với CUDA trư�
 
 ## 7. Chạy dự án
 
-### Chạy giao diện inference
+### Chạy giao diện web và API
 
-Ứng dụng chỉ nạp và chạy inference với ba checkpoint đã có, không gọi pipeline training:
+Ứng dụng Flask phục vụ frontend HTML/CSS/JavaScript và API trên cùng origin. Khởi động từ thư mục gốc sau khi cài dependencies:
 
 ```powershell
-pip install -r requirements.txt
-streamlit run app.py
+python app.py
 ```
 
-Các checkpoint được đọc từ `pytorch/PhoBERT.pt`, `pytorch/PhoBERT___CNN-2.pt` và `pytorch/PhoBERT___CNN-3.pt`. Ứng dụng cache ba model và PhoBERT tokenizer; văn bản được tokenize trực tiếp, padding/truncation tới 256 tokens như preprocessing trong training. Dataset card xác nhận nhãn `0 = Human`, `1 = AI`. Nếu CUDA không khả dụng, inference chạy trên CPU. Model loading sai checkpoint hoặc sai kiến trúc sẽ hiện lỗi rõ ràng trên giao diện.
+Mở `http://127.0.0.1:5000`. Lần prediction đầu tiên tải tokenizer, config và ba checkpoint từ Hugging Face/local checkpoint; các model được cache trong tiến trình. Checkpoint cần có tại `pytorch/PhoBERT.pt`, `pytorch/PhoBERT___CNN-2.pt` và `pytorch/PhoBERT___CNN-3.pt`. Inference giữ nguyên mapping `0 = Human`, `1 = AI`, thiết bị/dtype, padding và truncation trong `src/phobert_cnn/inference.py`.
+
+### Kiểm tra API
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5000/api/health
+Invoke-RestMethod http://127.0.0.1:5000/api/models
+
+$json = '{"text":"A short Vietnamese text for classification.","model":"phobert"}'
+$body = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Uri http://127.0.0.1:5000/api/predict -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+```
+
+`model` nhận `phobert`, `phobert-cnn-2` hoặc `phobert-cnn-3`. Response gồm nhãn, confidence, xác suất từng lớp, model, thời gian chạy và cờ `was_truncated`.
+
+Tokenizer hiện dùng `MAX_LENGTH = 256` trong `src/phobert_cnn/inference.py`; frontend không giới hạn token/ký tự và backend truncation theo pipeline. Chỉ đổi lên 512 sau khi xác nhận `max_position_embeddings` của PhoBERT đủ chứa sequence cùng special tokens. Khi đã xác nhận, đổi `MAX_LENGTH` ở inference module (và `--max-length` nếu muốn cấu hình training tương lai); thay đổi độ dài inference có thể làm khác prediction với checkpoint đã dùng input 256, dù kiến trúc và trọng số không đổi.
 
 ### Kiểm tra pipeline không tải PhoBERT
 
@@ -169,6 +183,14 @@ python -m phobert_cnn.cli `
 
 ```text
 cd1/
+├── app.py              # launcher Flask tương thích ở thư mục gốc
+├── backend/
+│   ├── app.py           # Flask routes, phục vụ trang và API
+│   └── predictor.py     # adapter gọi pipeline inference hiện có
+├── frontend/
+│   ├── index.html       # giao diện
+│   ├── style.css        # responsive styles
+│   └── script.js        # fetch API và render kết quả
 ├── src/phobert_cnn/
 │   ├── cli.py          # entry point, tham số và thực nghiệm so sánh
 │   ├── data.py         # load, clean, cân bằng, split và tokenize dữ liệu
@@ -176,9 +198,8 @@ cd1/
 │   ├── model.py        # PhoBERT, PhoBERT-CNN và TinyEncoder
 │   ├── training.py     # training loop, checkpoint và evaluation
 │   └── metrics.py      # Accuracy, Precision, Recall, F1 và confusion matrix
-├── app.py              # giao diện Streamlit cho inference ba model
 ├── pytorch/            # ba checkpoint đã huấn luyện
-├── tests/test_pipeline.py
+├── tests/               # pipeline và API tests
 ├── artifacts/          # checkpoint và bảng kết quả thực nghiệm
 ├── requirements.txt
 └── pyproject.toml

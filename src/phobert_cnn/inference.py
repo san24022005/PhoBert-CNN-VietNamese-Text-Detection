@@ -55,7 +55,9 @@ def _read_state_dict(checkpoint: Path) -> Mapping[str, torch.Tensor]:
     return payload
 
 
-def load_models() -> tuple[dict[str, nn.Module], Any, torch.device]:
+def load_models(
+    errors: dict[str, str] | None = None,
+) -> tuple[dict[str, nn.Module], Any, torch.device]:
     """Load each trained state_dict once and return eval-mode models and tokenizer."""
     try:
         from transformers import AutoConfig, AutoModel, AutoTokenizer
@@ -101,10 +103,14 @@ def load_models() -> tuple[dict[str, nn.Module], Any, torch.device]:
             del state_dict
             model.eval()
         except Exception as error:
-            raise RuntimeError(
+            message = (
                 f"Không thể nạp {name} từ {checkpoint}: {error}. "
                 "Kiểm tra checkpoint và kiến trúc model tương ứng trong model.py."
-            ) from error
+            )
+            if errors is None:
+                raise RuntimeError(message) from error
+            errors[name] = message
+            continue
         models[name] = model
 
     return models, tokenizer, device
@@ -115,6 +121,7 @@ def predict_all(
     models: Mapping[str, nn.Module],
     tokenizer: Any,
     device: torch.device,
+    errors: dict[str, str] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], bool]:
     if not text.strip():
         raise ValueError("Văn bản rỗng. Hãy nhập nội dung tiếng Việt trước khi phân loại.")
@@ -136,15 +143,20 @@ def predict_all(
     results: dict[str, dict[str, Any]] = {}
     with torch.no_grad():
         for name, model in models.items():
-            output = model(**encoded)
-            probabilities = torch.softmax(output["logits"].float(), dim=-1)[0].cpu().tolist()
-            predicted_id = int(torch.tensor(probabilities).argmax().item())
-            results[name] = {
-                "label": LABELS[predicted_id],
-                "confidence": probabilities[predicted_id],
-                "probabilities": {
-                    LABELS[index]: probability
-                    for index, probability in enumerate(probabilities)
-                },
-            }
+            try:
+                output = model(**encoded)
+                probabilities = torch.softmax(output["logits"].float(), dim=-1)[0].cpu().tolist()
+                predicted_id = int(torch.tensor(probabilities).argmax().item())
+                results[name] = {
+                    "label": LABELS[predicted_id],
+                    "confidence": probabilities[predicted_id],
+                    "probabilities": {
+                        LABELS[index]: probability
+                        for index, probability in enumerate(probabilities)
+                    },
+                }
+            except Exception as error:
+                if errors is None:
+                    raise
+                errors[name] = f"Không thể chạy {name}: {error}"
     return results, was_truncated
