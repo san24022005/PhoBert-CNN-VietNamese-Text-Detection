@@ -35,10 +35,10 @@ Thí nghiệm mặc định sử dụng dataset `ICCIES-2025-DetectAI/vietnamese
 | Hạng mục | Thiết lập |
 | --- | --- |
 | Bài toán | Binary text classification |
-| Mẫu mỗi nhãn | 5.000 mẫu nhãn `0` và 5.000 mẫu nhãn `1` |
-| Tổng số mẫu | 10.000 |
+| Mẫu mỗi nhãn | 15.000 mẫu nhãn `0` và 15.000 mẫu nhãn `1` |
+| Tổng số mẫu | 30.000 |
 | Chia dữ liệu | Train 70%, validation 15%, test 15% |
-| Kích thước dự kiến | 7.000 / 1.500 / 1.500 |
+| Kích thước dự kiến | 21.000 / 4.500 / 4.500 |
 | Làm sạch | Loại dòng rỗng, giá trị thiếu và văn bản trùng lặp |
 | Tokenizer | PhoBERT tokenizer |
 | Độ dài tối đa | 256 tokens |
@@ -53,7 +53,7 @@ Ba mô hình được huấn luyện trên cùng một balanced subset, cùng c�
 ```mermaid
 flowchart TD
 	A[Dataset Hugging Face] --> B[Remove null, empty and duplicate texts]
-	B --> C[Balanced subset: 5,000 + 5,000]
+	B --> C[Balanced subset: 15,000 + 15,000]
 	C --> D[Stratified split: 70/15/15]
 	D --> E[PhoBERT tokenizer, max length 256]
 	E --> F[PhoBERT baseline]
@@ -84,16 +84,16 @@ Bảng dưới đây là kết quả thực nghiệm hiện có trên test set. 
 
 | Xếp hạng | Mô hình | Accuracy | Precision | Recall | F1-score |
 | :---: | --- | ---: | ---: | ---: | ---: |
-| 1 | **PhoBERT-CNN (2)** | **0.9913** | 0.99 | 0.99 | 0.99 |
-| 2 | **PhoBERT** | 0.9873 | 0.99 | 0.99 | 0.99 |
-| 3 | **PhoBERT-CNN (3)** | 0.9747 | 0.98 | 0.97 | 0.97 |
+| 1 | **PhoBERT** | **0.9962** | 0.9962 | 0.9962 | 0.9962 |
+| 2 | **PhoBERT-CNN (3)** | 0.9929 | 0.9929 | 0.9929 | 0.9929 |
+| 3 | **PhoBERT-CNN (2)** | 0.9922 | 0.9922 | 0.9922 | 0.9922 |
 
 ### Nhận xét
 
-1. **PhoBERT-CNN (2) đạt kết quả tốt nhất** với Accuracy `0.9913`, cao hơn baseline PhoBERT khoảng `0.40` điểm phần trăm.
-2. **CNN kernel 2 phù hợp hơn kernel 3** trên thiết lập hiện tại, cho thấy các đặc trưng cục bộ ngắn có thể hữu ích hơn đối với dữ liệu này.
-3. **PhoBERT-CNN (3) giảm hiệu năng** so với hai mô hình còn lại. Nguyên nhân có thể liên quan đến kích thước receptive field, mức độ khớp dữ liệu hoặc hyperparameter chưa tối ưu cho kernel 3.
-4. Chênh lệch giữa các mô hình cần được diễn giải cùng confusion matrix và nhiều seed hơn trước khi kết luận về khả năng tổng quát hóa.
+1. **PhoBERT đạt hiệu năng cao nhất** với Accuracy `0.9962`, vượt trội hơn cả hai biến thể CNN trên cùng tập dữ liệu.
+2. **PhoBERT-CNN (3)** đạt kết quả tốt hơn **PhoBERT-CNN (2)** nhẹ, cho thấy các đặc trưng tri-gram có thể nắm bắt tốt hơn các mẫu ngữ cảnh trung bình trong văn bản tiếng Việt.
+3. **Mô hình cơ sở PhoBERT vẫn là lựa chọn tối ưu** trong thực nghiệm này nhờ pooling toàn cục giữ được thông tin ngữ cảnh rộng hơn, trong khi CNN có thể làm mất một phần thông tin khi dùng max pooling.
+4. Kết quả cho thấy hiệu suất của ba mô hình đều rất cao; để đánh giá độ bền và khả năng tổng quát hóa, cần bổ sung confusion matrix và nhiều seed khác nhau.
 
 ## 6. Cài đặt
 
@@ -111,16 +111,16 @@ Nếu sử dụng GPU, cài phiên bản PyTorch tương thích với CUDA trư�
 
 ## 7. Chạy dự án
 
-### Chạy giao diện Streamlit
+### Chạy giao diện inference
 
-Cài dependency và khởi động ứng dụng:
+Ứng dụng chỉ nạp và chạy inference với ba checkpoint đã có, không gọi pipeline training:
 
 ```powershell
 pip install -r requirements.txt
-streamlit run streamlit_app.py
+streamlit run app.py
 ```
 
-Ứng dụng cung cấp ô nhập văn bản, lựa chọn mô hình, đường dẫn checkpoint, xác suất dự đoán và bảng so sánh ba mô hình. Nếu chưa có checkpoint, giao diện vẫn hiển thị phần tổng quan và bảng kết quả; để dự đoán thật, chạy `--compare` trước rồi nhập đường dẫn file `.pt`.
+Các checkpoint được đọc từ `pytorch/PhoBERT.pt`, `pytorch/PhoBERT___CNN-2.pt` và `pytorch/PhoBERT___CNN-3.pt`. Ứng dụng cache ba model và PhoBERT tokenizer; văn bản được tokenize trực tiếp, padding/truncation tới 256 tokens như preprocessing trong training. Dataset card xác nhận nhãn `0 = Human`, `1 = AI`. Nếu CUDA không khả dụng, inference chạy trên CPU. Model loading sai checkpoint hoặc sai kiến trúc sẽ hiện lỗi rõ ràng trên giao diện.
 
 ### Kiểm tra pipeline không tải PhoBERT
 
@@ -172,9 +172,12 @@ cd1/
 ├── src/phobert_cnn/
 │   ├── cli.py          # entry point, tham số và thực nghiệm so sánh
 │   ├── data.py         # load, clean, cân bằng, split và tokenize dữ liệu
+│   ├── inference.py    # load checkpoint và dự đoán, không training
 │   ├── model.py        # PhoBERT, PhoBERT-CNN và TinyEncoder
 │   ├── training.py     # training loop, checkpoint và evaluation
 │   └── metrics.py      # Accuracy, Precision, Recall, F1 và confusion matrix
+├── app.py              # giao diện Streamlit cho inference ba model
+├── pytorch/            # ba checkpoint đã huấn luyện
 ├── tests/test_pipeline.py
 ├── artifacts/          # checkpoint và bảng kết quả thực nghiệm
 ├── requirements.txt
@@ -190,5 +193,4 @@ cd1/
 
 ## 10. Kết luận
 
-Thực nghiệm cho thấy việc kết hợp PhoBERT với CNN kernel 2 đạt kết quả tốt nhất trong ba cấu hình được khảo sát. Pipeline đã tách riêng train, validation và test, có checkpoint theo validation loss và xuất bảng so sánh tự động, phù hợp làm nền tảng cho báo cáo đồ án cuối khóa về nhận diện văn bản AI tiếng Việt.
-
+Thực nghiệm cho thấy mô hình PhoBERT cơ sở đạt hiệu năng cao nhất trong ba cấu hình được khảo sát, tiếp theo là PhoBERT-CNN (3) và PhoBERT-CNN (2). Pipeline đã tách riêng train, validation và test, có checkpoint theo validation loss và xuất bảng so sánh tự động, phù hợp làm nền tảng cho báo cáo đồ án cuối khóa về nhận diện văn bản AI tiếng Việt.

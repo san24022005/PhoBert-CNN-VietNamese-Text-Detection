@@ -1,0 +1,337 @@
+================================================================================
+                      BÁO CÁO TIỂU LUẬN MÔN HỌC
+
+ĐỀ TÀI: PHÂN LOẠI VĂN BẢN TIẾNG VIỆT DO AI TẠO BẰNG TINH CHỈNH MÔ HÌNH PHOBERT,
+               PHOBERT + CNN-2 VÀ PHOBERT + CNN-3
+================================================================================
+
+MỤC LỤC
+-------
+1. TÊN ĐỀ TÀI
+2. TÓM TẮT
+3. GIỚI THIỆU
+4. CƠ SỞ LÝ THUYẾT
+   4.1. Phân loại văn bản
+   4.2. PhoBERT
+   4.3. Fine-tuning
+   4.4. CNN trong xử lý văn bản
+5. DỮ LIỆU VÀ PHƯƠNG PHÁP
+   5.1. Dataset
+   5.2. Quy trình xử lý dữ liệu
+   5.3. Kiến trúc mô hình
+6. QUÁ TRÌNH HUẤN LUYỆN
+7. KẾT QUẢ THỰC NGHIỆM
+8. PHÂN TÍCH KẾT QUẢ
+9. SO SÁNH BA MÔ HÌNH
+10. HẠN CHẾ
+11. HƯỚNG PHÁT TRIỂN
+12. KẾT LUẬN
+
+================================================================================
+1. TÊN ĐỀ TÀI
+================================================================================
+"Phân loại văn bản Tiếng Việt do AI tạo bằng tinh chỉnh mô hình PhoBERT,
+PhoBERT + CNN-2 và PhoBERT + CNN-3"
+
+================================================================================
+2. TÓM TẮT
+================================================================================
+Sự phát triển mạnh mẽ của các mô hình ngôn ngữ lớn (LLMs) đã làm gia tăng đáng kể lượng văn bản do AI tạo ra trên không gian mạng. Điều này đặt ra yêu cầu cấp thiết về việc phát hiện và phân loại văn bản AI nhằm đảm bảo tính toàn vẹn thông tin và học thuật. 
+
+Nghiên cứu này thử nghiệm và so sánh ba phương pháp tinh chỉnh (fine-tuning) dựa trên kiến trúc PhoBERT gồm: PhoBERT Classifier tiêu chuẩn (sử dụng masked mean pooling), PhoBERT + CNN-2 (sử dụng 1 nhánh Conv1D kernel size 2), và PhoBERT + CNN-3 (sử dụng 1 nhánh Conv1D kernel size 3). Các mô hình được huấn luyện và đánh giá trên bộ dữ liệu cân bằng gồm 30,000 mẫu được trích xuất từ tập dữ liệu "vietnamese_news_human_ai" của ICCIES-2025-DetectAI. 
+
+Kết quả thực nghiệm cho thấy cả ba mô hình đều đạt hiệu năng xuất sắc vượt trội. Trong đó, mô hình PhoBERT Classifier tiêu chuẩn đạt độ chính xác (Accuracy) cao nhất là 99.62%, theo sau là PhoBERT + CNN-3 với 99.29% và PhoBERT + CNN-2 với 99.22%. Kết quả nghiên cứu khẳng định tiềm năng to lớn của việc ứng dụng các mô hình pre-trained tiếng Việt kết hợp các mạng nơ-ron tích chập nông trong việc phát hiện văn bản sinh bởi trí tuệ nhân tạo.
+
+================================================================================
+3. GIỚI THIỆU
+================================================================================
+Trong những năm gần đây, kỷ nguyên của Trí tuệ nhân tạo (AI) đã chứng kiến bước nhảy vọt thần kỳ với sự xuất hiện của các mô hình sinh ngôn ngữ tự nhiên như ChatGPT, Gemini, Claude,... Khả năng tạo ra các văn bản mạch lạc, tự nhiên như con người của các mô hình này đã mở ra nhiều cơ hội nhưng cũng đi kèm với không ít thách thức lớn. Việc văn bản do AI tạo ra xuất hiện tràn lan mà không có sự kiểm soát gây ra các vấn đề nghiêm trọng về học thuật (gian lận thi cử, viết hộ bài luận), truyền thông (tin giả mạo tự động hóa trên diện rộng) và bảo mật thông tin.
+
+Tuy nhiên, việc phân biệt văn bản do con người viết và văn bản sinh bởi AI bằng mắt thường ngày càng trở nên bất khả thi. Đặc biệt đối với tiếng Việt - một ngôn ngữ đơn âm tiết, có tính phong phú về mặt ngữ nghĩa, cấu trúc từ ghép phức tạp và tính đa nghĩa cao - bài toán này càng trở nên thách thức hơn rất nhiều.
+
+Mục tiêu của đề tài này là xây dựng, tinh chỉnh và so sánh các kiến trúc học sâu tối ưu nhất nhằm giải quyết triệt để bài toán phân loại văn bản tiếng Việt do AI tạo. Chúng tôi tập trung nghiên cứu, hiện thực hóa thực nghiệm trên 3 kiến trúc mô hình chính:
+1. PhoBERT (Phân loại dựa trên đặc trưng ngữ cảnh từ PhoBERT kết hợp Mean Pooling)
+2. PhoBERT + CNN-2 (Kết hợp lớp tích chập một chiều Conv1D kích thước kernel 2)
+3. PhoBERT + CNN-3 (Kết hợp lớp tích chập một chiều Conv1D kích thước kernel 3)
+
+================================================================================
+4. CƠ SỞ LÝ THUYẾT
+================================================================================
+
+4.1. Phân loại văn bản (Text Classification)
+Phân loại văn bản là một bài toán học máy có giám sát cổ điển trong xử lý ngôn ngữ tự nhiên (NLP). Mục tiêu là gán một hoặc nhiều nhãn danh mục được định nghĩa trước cho một văn bản đầu vào tự do.
+- Input (X): Chuỗi văn bản tiếng Việt chưa cấu trúc.
+- Output (Y): Nhãn phân loại thuộc không gian nhãn rời rạc.
+- Các lớp phân loại trong dự án: 
+  + Nhãn 0: Human-Written (Văn bản do con người viết).
+  + Nhãn 1: AI-Generated (Văn bản do AI tạo).
+
+4.2. PhoBERT
+PhoBERT là mô hình ngôn ngữ pre-trained tiên phong được tối ưu hóa đặc biệt dành riêng cho tiếng Việt dựa trên kiến trúc RoBERTa của Facebook. PhoBERT được huấn luyện trước trên kho ngữ liệu tiếng Việt khổng lồ lên tới 20GB văn bản thô công cộng. Việc sử dụng công cụ tách từ (word segmentation) chuyên dụng cho tiếng Việt trước khi tokenization giúp PhoBERT nắm bắt mối quan hệ ngữ pháp và ngữ cảnh từ vựng tiếng Việt vượt trội hơn hẳn so với các mô hình đa ngôn ngữ tổng quát khác như mBERT hay XLM-RoBERTa.
+
+4.3. Fine-tuning (Tinh chỉnh mô hình)
+Fine-tuning là quá trình lấy một mô hình đã được huấn luyện sẵn trên một lượng lớn dữ liệu tổng quát (pre-trained model), sau đó tiếp tục huấn luyện với tốc độ học nhỏ (learning rate thấp) trên tập dữ liệu đặc thù của một tác vụ cụ thể. Phương pháp này giúp tận dụng toàn bộ tri thức ngôn ngữ phong phú đã được mô hình học trước đó, giảm thiểu tối đa tài nguyên tính toán và thời gian huấn luyện so với việc phải xây dựng và huấn luyện mô hình sâu từ đầu.
+
+4.4. Mạng tích chập 1D (CNN-1D) trong xử lý văn bản
+Mạng nơ-ron tích chập (CNN) ban đầu được phát triển cho thị giác máy tính, nhưng cũng chứng minh được tính hiệu quả cao trong xử lý văn bản khi áp dụng tích chập một chiều (Conv1D). 
+- Trích xuất đặc trưng cục bộ: Lớp tích chập trượt qua các vector từ (word embeddings) để trích xuất các đặc trưng cụ thể của các cụm từ liền kề (n-grams).
+- Ý nghĩa của CNN-2 và CNN-3: Sử dụng kích thước kernel bằng 2 và 3 tương ứng với việc quét qua các cụm bi-gram (2 từ ghép) và tri-gram (3 từ ghép), nắm bắt các thông tin ngữ cảnh cục bộ ngắn và trung bình cực kỳ hiệu quả để đưa vào bộ phân loại tuyến tính.
+
+================================================================================
+5. DỮ LIỆU VÀ PHƯƠNG PHÁP
+================================================================================
+
+5.1. Dataset
+- Nguồn dữ liệu: "ICCIES-2025-DetectAI/vietnamese_news_human_ai" từ Hugging Face Hub.
+- Số lượng mẫu gốc: Tập train ban đầu chứa 200,000 dòng dữ liệu cân bằng hoàn hảo (100,000 nhãn 0 và 100,000 nhãn 1).
+- Nhãn: 0 (Human-Written) và 1 (AI-Generated).
+- Tập dữ liệu con thực nghiệm cân bằng được trích xuất: 30,000 mẫu (15,000 mẫu nhãn 0 và 15,000 mẫu nhãn 1).
+- Tỷ lệ phân chia tập dữ liệu: Stratified Split 70% Train (21,000 mẫu), 15% Validation (4,500 mẫu), và 15% Test (4,500 mẫu) nhằm đảm bảo phân phối nhãn đồng đều tuyệt đối trên mọi tập.
+
+5.2. Quy trình xử lý dữ liệu
+Quy trình xử lý tuần tự được trực quan hóa bằng sơ đồ dưới đây:
+
++-------------------------------------------------------------+
+|                   Tải tập dữ liệu gốc                       |
+|      (vietnamese_news_human_ai - 200,000 samples)           |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                     Tiền xử lý & Làm sạch                   |
+| - Loại bỏ các giá trị null hoặc rỗng                        |
+| - Cắt bỏ khoảng trắng thừa hai đầu văn bản                  |
+| - Loại bỏ các dòng văn bản trùng lặp (drop duplicates)      |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                  Trích chọn tập cân bằng                     |
+| - Chọn ngẫu nhiên có kiểm soát 15,000 mẫu nhãn 0            |
+| - Chọn ngẫu nhiên có kiểm soát 15,000 mẫu nhãn 1            |
+| - Gộp lại và xáo trộn ngẫu nhiên thành bộ dữ liệu 30,000 mẫu|
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|              Phân chia tập dữ liệu (Stratified)              |
+|               - Train (70%): 21,000 samples                 |
+|               - Validation (15%): 4,500 samples             |
+|               - Test (15%): 4,500 samples                   |
++------------------------------+------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                     Tokenization (PhoBERT)                  |
+|        - Padding & Truncation (Max Length = 256)            |
++-------------------------------------------------------------+
+
+5.3. Kiến trúc mô hình chi tiết
+
+Mô hình 1: PhoBERT Classifier (Masked Mean Pooling)
+---------------------------------------------------
+```
+                    +--------------------+
+                    | Input Text (Tokens)|
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |  PhoBERT Encoder   |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Masked Mean Pooling|
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |      Dropout       |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Linear Classifier  |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Prediction (0 / 1) |
+                    +--------------------+
+```
+
+Mô hình 2: PhoBERT + CNN-2 (Kernel Size = 2)
+-------------------------------------------
+```
+                    +--------------------+
+                    | Input Text (Tokens)|
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |  PhoBERT Encoder   |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Transpose Features |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |  Conv1D (Kernel 2) |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Global Max Pooling |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |      Dropout       |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Linear Classifier  |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Prediction (0 / 1) |
+                    +--------------------+
+```
+
+Mô hình 3: PhoBERT + CNN-3 (Kernel Size = 3)
+-------------------------------------------
+```
+                    +--------------------+
+                    | Input Text (Tokens)|
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |  PhoBERT Encoder   |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Transpose Features |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |  Conv1D (Kernel 3) |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Global Max Pooling |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    |      Dropout       |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Linear Classifier  |
+                    +---------+----------+
+                              |
+                              v
+                    +--------------------+
+                    | Prediction (0 / 1) |
+                    +--------------------+
+```
+
+================================================================================
+6. QUÁ TRÌNH HUẤN LUYỆN
+================================================================================
+- Môi trường: Google Colab
+- Phần cứng tăng tốc: GPU Tesla T4 (CUDA khả dụng)
+- Các thư viện chính: Hugging Face Transformers, PyTorch, Datasets, Scikit-learn, Pandas, Numpy
+- Cấu hình siêu tham số (Hyperparameters):
+
++----------------------+----------------------+
+| Thông số             | Giá trị              |
++----------------------+----------------------+
+| Model Name           | vinai/phobert-base   |
+| Epochs               | 3                    |
+| Batch size           | 8                    |
+| Learning rate        | 2e-5                 |
+| Max token length     | 256                  |
+| Optimizer            | AdamW (wd=0.01)      |
+| Loss function        | Cross Entropy Loss   |
++----------------------+----------------------+
+
+================================================================================
+7. KẾT QUẢ THỰC NGHIỆM
+================================================================================
+Dưới đây là kết quả thực nghiệm chi tiết thu được sau khi kết thúc quá trình huấn luyện và đánh giá trên tập dữ liệu kiểm thử (Test Set):
+
++-------------------+----------+-----------+--------+----------+----------+
+| Model             | Accuracy | Precision | Recall | F1-score | Loss     |
++-------------------+----------+-----------+--------+----------+----------+
+| PhoBERT           | 0.9962   | 0.9962    | 0.9962 | 0.9962   | 0.0150   |
+| PhoBERT + CNN-2   | 0.9922   | 0.9922    | 0.9922 | 0.9922   | 0.0285   |
+| PhoBERT + CNN-3   | 0.9929   | 0.9929    | 0.9929 | 0.9929   | 0.0213   |
++-------------------+----------+-----------+--------+----------+----------+
+
+================================================================================
+8. PHÂN TÍCH KẾT QUẢ
+================================================================================
+
+1. Hiệu năng tổng thể siêu việt:
+Cả ba mô hình đều đạt mức độ chính xác tuyệt vời (trên 99.2% trên toàn bộ các chỉ số). Điều này chứng minh rằng việc sử dụng một bộ biểu diễn ngôn ngữ mạnh mẽ như PhoBERT làm nền tảng là cực kỳ hiệu quả đối với bài toán phân biệt văn bản AI tiếng Việt.
+
+2. Sự vượt trội của PhoBERT Classifier tiêu chuẩn:
+Mô hình PhoBERT Classifier thuần túy sử dụng Masked Mean Pooling đạt hiệu năng cao nhất (Accuracy = 99.62%, Loss thấp nhất = 0.0150). Cơ chế pooling trên toàn bộ độ dài chuỗi chú ý cho phép bảo toàn cấu trúc phân bố câu tốt nhất để bộ phân loại thực hiện gán nhãn.
+
+3. Vai trò của các nhánh CNN:
+- Mô hình PhoBERT + CNN-3 (99.29% accuracy) cho hiệu năng tốt hơn một chút so với PhoBERT + CNN-2 (99.22% accuracy).
+- Điều này hợp lý về mặt lý thuyết vì các cụm tri-gram (3 từ ghép tiếng Việt) mang nhiều sắc thái ngữ cảnh đặc trưng của cấu trúc ngữ pháp tiếng Việt hơn các cụm bi-gram (2 từ) ngắn.
+- Tuy nhiên, việc đưa thêm một lớp tích chập nông lên trên Transformer pre-trained trong trường hợp này làm giảm nhẹ hiệu năng tổng thể so với Mean Pooling thuần túy. Nguyên nhân có thể do việc pooling cực đại (Max Pooling) sau lớp CNN làm mất đi một số thông tin nền ngữ cảnh toàn cục hữu ích mà Mean Pooling giữ lại được.
+
+================================================================================
+9. SO SÁNH BA MÔ HÌNH
+================================================================================
+
++-------------------+------------------+------------------+------------------+
+| Tiêu chí          | PhoBERT          | PhoBERT + CNN-2  | PhoBERT + CNN-3  |
++-------------------+------------------+------------------+------------------+
+| Kiến trúc         | Transformer      | Transformer +    | Transformer +    |
+|                   | Mean Pooling     | Conv1D (k=2)     | Conv1D (k=3)     |
+| Đặc trưng         | Ngữ cảnh toàn cục| N-grams cục bộ   | N-grams cục bộ   |
+|                   |                  | (Bi-gram)        | (Tri-gram)       |
+| CNN               | Không            | Có (Kernel = 2)  | Có (Kernel = 3)  |
+| Accuracy          | 0.9962           | 0.9922           | 0.9929           |
+| F1-score          | 0.9962           | 0.9922           | 0.9929           |
+| Nhận xét          | Tốt nhất, tối ưu| Hiệu năng cao,   | Tốt hơn CNN-2 do |
+|                   | nhất về tài nguyên| hội tụ nhanh     | nắm bắt cụm từ   |
+|                   | và độ chính xác  |                  | dài tốt hơn      |
++-------------------+------------------+------------------+------------------+
+
+================================================================================
+10. HẠN CHẾ
+================================================================================
+- Miền dữ liệu (Data Domain): Dữ liệu huấn luyện chủ yếu tập trung vào văn bản báo chí. Điều này có thể làm giảm khả năng tổng quát hóa đối với các văn bản thuộc lĩnh vực hẹp phức tạp hơn như y khoa, luật pháp, văn bản khoa học kỹ thuật chuyên sâu.
+- Độ dài văn bản hạn chế: Siêu tham số Max Length được giới hạn ở 256 tokens để tối ưu hóa tài nguyên tính toán trên GPU T4, dẫn đến việc các văn bản quá dài sẽ bị cắt cụt và mất mát thông tin.
+- Chi phí tính toán: Việc lưu trữ và huấn luyện các mô hình lớn như PhoBERT đòi hỏi tài nguyên phần cứng chuyên dụng có GPU để đảm bảo tốc độ xử lý chấp nhận được, gây khó khăn cho việc triển khai trên các thiết bị cấu hình thấp.
+
+================================================================================
+11. HƯỚNG PHÁT TRIỂN
+================================================================================
+- Đề xuất 1: Thu thập thêm dữ liệu từ các nguồn đa dạng như mạng xã hội, diễn đàn thảo luận, tài liệu kỹ thuật để cải thiện độ phủ ngữ cảnh.
+- Đề xuất 2: Thử nghiệm tích hợp các kiến trúc CNN đa luồng (Multi-branch CNN) kết hợp đồng thời nhiều kích thước kernel khác nhau (ví dụ: song song kernel 2, 3 và 4) nhằm tối ưu hóa khả năng trích chọn đặc trưng n-gram.
+- Đề xuất 3: Áp dụng các kỹ thuật nén mô hình như Knowledge Distillation (tri thức hóa học máy) hoặc Quantization để triển khai mô hình gọn nhẹ, hoạt động theo thời gian thực trên các ứng dụng Web/Mobile thông thường.
+
+================================================================================
+12. KẾT LUẬN
+================================================================================
+Đề tài đã xây dựng và thực nghiệm thành công giải pháp phân loại văn bản tiếng Việt do AI tạo ra thông qua việc tinh chỉnh mô hình Transformer PhoBERT cùng các biến thể kết hợp mạng nơ-ron tích chập một chiều (CNN). 
+
+Với kết quả độ chính xác đạt trên 99.2% ở tất cả các phương pháp thử nghiệm, nghiên cứu này chứng minh tính khả thi và độ tin cậy rất cao của giải pháp trong thực tế đời sống. Thành công này tạo tiền đề vững chắc cho việc phát triển các ứng dụng kiểm soát và phát hiện nội dung số tiếng Việt tự động, góp phần bảo vệ an ninh và làm trong sạch môi trường thông tin số.
+================================================================================
